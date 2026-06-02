@@ -1,0 +1,98 @@
+"""Constants for Adlar Heatpump integration."""
+
+DOMAIN = "adlar_heatpump"
+DEFAULT_PORT = 502
+DEFAULT_SLAVE = 1
+DEFAULT_SCAN_INTERVAL = 60
+
+# ─────────────────────────────────────────────
+# Register definitions (validated against Homey app + mbpoll measurements)
+# Each entry: (address, name, unit, device_class, scale, signed)
+#   scale: multiply raw value by this (1 = no scaling)
+#   signed: True = signed 16-bit integer
+#
+# Temperature scale: ×1 (R32 model sends direct °C values)
+# Current scale: ×0.1 for compressor, ×0.01 for unit level
+# Power scale: ×0.01 (raw/100 = kW)
+# ─────────────────────────────────────────────
+
+SENSOR_REGISTERS = [
+    # address, name, unit, device_class, scale, signed
+    (0x0040, "Compressor Running Frequency",     "Hz",    "frequency",        1,    True),
+    (0x0041, "Fan Running Speed",                "Hz",    "frequency",        1,    True),
+    (0x0042, "EEV Open Step",                    "P",     None,               1,    True),
+    (0x0043, "EVI Valve Open Step",              "P",     None,               1,    True),
+    # 0x0044 AC Input Voltage not available on R32 model (always 0)
+    (0x0045, "AC Input Current",                 "A",     "current",          0.01, True),
+    (0x0046, "Compressor Phase Current",         "A",     "current",          0.1,  True),
+    # 0x0047 Compressor IPM Temp not available on R32 model (always 0)
+    # 0x0048 unknown register, returns unexpected value
+    (0x0049, "High Pressure Saturation Temp",    "°C",    "temperature",      1,    True),
+    (0x004A, "Low Pressure Saturation Temp",     "°C",    "temperature",      1,    True),
+    (0x004B, "Ambient Temp T1",                  "°C",    "temperature",      1,    True),
+    (0x004C, "Outer Coil Temp T2",               "°C",    "temperature",      1,    True),
+    (0x004D, "Inner Coil Temp T3",               "°C",    "temperature",      1,    True),
+    (0x004E, "Exhaust Temp T5",                  "°C",    "temperature",      1,    True),
+    (0x004F, "Suction Temp T4",                  "°C",    "temperature",      1,    True),
+    (0x0050, "Water Outlet Temp T7",             "°C",    "temperature",      1,    True),
+    (0x0051, "Water Inlet Temp T6",              "°C",    "temperature",      1,    True),
+    (0x0052, "Economizer Inlet Temp T8",         "°C",    "temperature",      1,    True),
+    (0x0053, "Economizer Outlet Temp T9",        "°C",    "temperature",      1,    True),
+    # 0x0054 DHW Tank Temp returns 119 - not valid on this model
+    (0x0055, "Plate HX Exhaust Temp",            "°C",    "temperature",      1,    True),
+    (0x0058, "Water Pump Speed PWM",             "%",     None,               1,    True),
+    (0x0059, "Water Flow",                       "L/min", "volume_flow_rate", 1,    True),
+    (0x005B, "Unit Input Current",               "A",     "current",          0.01, True),
+    (0x005C, "Unit Input Power",                 "kW",    "power",            0.01, True),
+    (0x0085, "DC Bus Inverter Voltage",          "V",     "voltage",          0.1,  True),
+]
+
+# Running status register (bitmask sensors)
+STATUS_REGISTER = 0x0000
+STATUS_BITS = [
+    (0x0001, "Running Status: Refrigerant Recovery"),
+    (0x0002, "Running Status: Primary Anti-freeze"),
+    (0x0004, "Running Status: Secondary Anti-freeze"),
+    (0x0008, "Running Status: Fault Alarm"),
+    (0x0010, "Running Status: System Oil Return"),
+    (0x0100, "Running Status: System Frosting"),
+    (0x1000, "Running Status: Shutdown after Reaching Temp"),
+    (0x2000, "Running Status: Shutdown after Unit Failure"),
+    (0x4000, "Running Status: Unit Operation"),
+    (0x8000, "Running Status: Unit Waiting for Operation"),
+]
+
+# 32-bit energy register (high word first, low word second)
+ENERGY_REGISTER = 0x005D  # high=0x005D, low=0x005E
+
+# Writable number registers (address, name, unit, device_class, min, max, step)
+NUMBER_REGISTERS = [
+    (0x0300, "Temp Set Cooling",       "°C", "temperature", 7,  25, 1),
+    (0x0301, "Temp Set Heating",       "°C", "temperature", 15, 60, 1),
+    (0x0303, "Temp Set Floor Heating", "°C", "temperature", 20, 60, 1),
+]
+
+# ON/OFF switch register
+SWITCH_REGISTER = 0x0305
+
+# Select registers (address, name, options_map)
+CURVE_OPTIONS = {
+    "Off": 0, "H1": 1, "H2": 2, "H3": 3, "H4": 4,
+    "H5": 5, "H6": 6, "H7": 7, "H8": 8,
+    "L1": 11, "L2": 12, "L3": 13, "L4": 14,
+    "L5": 15, "L6": 16, "L7": 17, "L8": 18,
+}
+
+SELECT_REGISTERS = [
+    (0x0304, "Mode", {
+        "Cooling": 0, "Heating": 1, "Hot Water": 2,
+        "Floor Heating": 3, "Hot Water + Cooling": 4,
+        "Hot Water + Heating": 5, "Hot Water + Floor Heating": 7,
+    }),
+    (0x0307, "Running Mode", {
+        "Standard Mode": 0, "Boost": 1, "Silent": 2,
+    }),
+    (0x0313, "Cooling Setting Curve",            CURVE_OPTIONS),
+    (0x0314, "Heating Setting Curve",            CURVE_OPTIONS),
+    (0x0316, "Underfloor Heating Setting Curve", CURVE_OPTIONS),
+]
