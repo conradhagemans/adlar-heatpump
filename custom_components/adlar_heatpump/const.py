@@ -6,45 +6,56 @@ DEFAULT_SLAVE = 1
 DEFAULT_SCAN_INTERVAL = 60
 
 # ─────────────────────────────────────────────
-# Register definitions (validated against Homey app + mbpoll measurements)
+# Register definitions — adressen gebaseerd op HHI Modbus repo v2.2
+# Schaling gevalideerd met Tuya app (Conrad, juni 2026):
+#   R32 model stuurt temperaturen als directe graden (130 = 13°C), scale=1
+#   NIET ×0.1 zoals HHI aangeeft (die werkt met een andere firmware/model)
 # Each entry: (address, name, unit, device_class, scale, signed)
-#   scale: multiply raw value by this (1 = no scaling)
-#   signed: True = signed 16-bit integer
-#
-# Temperature scale: ×1 (R32 model sends direct °C values)
-# Current scale: ×0.1 for compressor, ×0.01 for unit level
-# Power scale: ×0.01 (raw/100 = kW)
 # ─────────────────────────────────────────────
 
 SENSOR_REGISTERS = [
     # address, name, unit, device_class, scale, signed
-    (0x0040, "Compressor Running Frequency",     "Hz",    "frequency",        1,    True),
-    (0x0041, "Fan Running Speed",                "Hz",    "frequency",        1,    True),
-    (0x0042, "EEV Open Step",                    "P",     None,               1,    True),
-    (0x0043, "EVI Valve Open Step",              "P",     None,               1,    True),
-    # 0x0044 AC Input Voltage not available on R32 model (always 0)
-    (0x0045, "AC Input Current",                 "A",     "current",          0.01, True),
-    (0x0046, "Compressor Phase Current",         "A",     "current",          0.1,  True),
-    # 0x0047 Compressor IPM Temp not available on R32 model (always 0)
-    # 0x0048 unknown register, returns unexpected value
-    (0x0049, "High Pressure Saturation Temp",    "°C",    "temperature",      1,    True),
-    (0x004A, "Low Pressure Saturation Temp",     "°C",    "temperature",      1,    True),
-    (0x004B, "Ambient Temp T1",                  "°C",    "temperature",      1,    True),
-    (0x004C, "Outer Coil Temp T2",               "°C",    "temperature",      1,    True),
-    (0x004D, "Inner Coil Temp T3",               "°C",    "temperature",      1,    True),
-    (0x004E, "Exhaust Temp T5",                  "°C",    "temperature",      1,    True),
-    (0x004F, "Suction Temp T4",                  "°C",    "temperature",      1,    True),
-    (0x0050, "Water Outlet Temp T7",             "°C",    "temperature",      1,    True),
-    (0x0051, "Water Inlet Temp T6",              "°C",    "temperature",      1,    True),
-    (0x0052, "Economizer Inlet Temp T8",         "°C",    "temperature",      1,    True),
-    (0x0053, "Economizer Outlet Temp T9",        "°C",    "temperature",      1,    True),
-    # 0x0054 DHW Tank Temp returns 119 - not valid on this model
-    (0x0055, "Plate HX Exhaust Temp",            "°C",    "temperature",      1,    True),
-    (0x0058, "Water Pump Speed PWM",             "%",     None,               1,    True),
-    (0x0059, "Water Flow",                       "L/min", "volume_flow_rate", 1,    True),
-    (0x005B, "Unit Input Current",               "A",     "current",          0.01, True),
-    (0x005C, "Unit Input Power",                 "kW",    "power",            0.01, True),
-    (0x0085, "DC Bus Inverter Voltage",          "V",     "voltage",          0.1,  True),
+
+    # --- Compressor & Ventilator ---
+    (0x0040, "Compressor Running Frequency", "Hz",    "frequency",        1,     True),
+    (0x0041, "Fan Running Speed",            "Hz",    "frequency",        1,     True),
+    (0x0042, "EEV Open Step",                "P",     None,               1,     True),
+    (0x0043, "EVI Valve Open Step",          "P",     None,               1,     True),
+
+    # --- Elektrisch (compressor niveau) ---
+    (0x0045, "AC Input Current",             "A",     "current",          0.1,   True),
+    (0x0046, "Compressor Phase Current",     "A",     "current",          0.1,   True),
+
+    # --- Temperaturen: adressen HHI v2.2, schaling ×1 (R32 model) ---
+    (0x0047, "Compressor IPM Temp",          "°C",    "temperature",      1,     True),
+    (0x0048, "High Pressure Saturation Temp","°C",    "temperature",      1,     True),
+    (0x0049, "Low Pressure Saturation Temp", "°C",    "temperature",      1,     True),
+    (0x004A, "Ambient Temp T1",              "°C",    "temperature",      1,     True),
+    (0x004B, "Outer Coil Temp T2",           "°C",    "temperature",      1,     True),
+    (0x004C, "Inner Coil Temp T3",           "°C",    "temperature",      1,     True),
+    (0x004D, "Suction Temp T4",              "°C",    "temperature",      1,     True),
+    (0x004E, "Exhaust Temp T5",              "°C",    "temperature",      1,     True),
+    (0x004F, "Water Inlet Temp T6",          "°C",    "temperature",      1,     True),
+    (0x0050, "Water Outlet Temp T7",         "°C",    "temperature",      1,     True),
+    (0x0051, "Economizer Inlet Temp T8",     "°C",    "temperature",      1,     True),
+    (0x0052, "Economizer Outlet Temp T9",    "°C",    "temperature",      1,     True),
+    # 0x0053 = Device Tooling No — geen temperatuur, weglaten
+    (0x0054, "DHW Tank Temp",                "°C",    "temperature",      1,     True),
+    (0x0055, "Plate HX Exhaust Temp",        "°C",    "temperature",      1,     True),
+    # 0x0056 = Drive Manufacturer Code — geen sensor, weglaten
+
+    # --- Pomp & Flow ---
+    (0x0057, "Water Pump Speed PWM",         "%",     None,               1,     True),
+    (0x0058, "Water Flow",                   "L/min", "volume_flow_rate", 1,     True),
+    (0x0059, "DHW Return Water Temp",        "°C",    "temperature",      1,     True),
+
+    # --- Unit niveau elektrisch ---
+    (0x005A, "Unit Input Voltage",           "V",     "voltage",          1,     True),
+    (0x005B, "Unit Input Current",           "A",     "current",          0.01,  True),
+    (0x005C, "Unit Input Power",             "kW",    "power",            0.01,  True),
+
+    # --- DC Bus ---
+    (0x0085, "DC Bus Inverter Voltage",      "V",     "voltage",          0.1,   True),
 ]
 
 # Running status register (bitmask sensors)
@@ -62,8 +73,8 @@ STATUS_BITS = [
     (0x8000, "Running Status: Unit Waiting for Operation"),
 ]
 
-# 32-bit energy register (high word first, low word second)
-ENERGY_REGISTER = 0x005D  # high=0x005D, low=0x005E
+# Energy register: enkel 16-bit register, waarde direct in kWh (geen schaling)
+ENERGY_REGISTER = 0x005D
 
 # Writable number registers (address, name, unit, device_class, min, max, step)
 NUMBER_REGISTERS = [

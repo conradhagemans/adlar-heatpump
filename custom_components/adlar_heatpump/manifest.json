@@ -1,7 +1,7 @@
 {
   "domain": "adlar_heatpump",
   "name": "Adlar Heatpump (Aurora II)",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "documentation": "https://github.com/conradhagemans/adlar-heatpump",
   "issue_tracker": "https://github.com/conradhagemans/adlar-heatpump/issues",
   "dependencies": [],

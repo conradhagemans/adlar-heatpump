@@ -14,8 +14,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, SENSOR_REGISTERS
 from .coordinator import AdlarCoordinator
 
-_TOTAL_INCREASING = {"energy"}
-
 
 def _safe_device_class(name: str | None):
     if name is None:
@@ -35,7 +33,8 @@ async def async_setup_entry(
         AdlarSensor(coordinator, address, name, unit, device_class)
         for address, name, unit, device_class, scale, signed in SENSOR_REGISTERS
     ]
-    entities.append(AdlarSensor(coordinator, 0x005D, "Unit Power Consumption", "kWh", "energy"))
+    # Energy: state_class=TOTAL zodat HA dalingen (bijv. na reset) correct afhandelt
+    entities.append(AdlarEnergySensor(coordinator))
     entities.append(AdlarSensor(coordinator, 0x0027, "Compressor Target Frequency", "Hz", "frequency"))
     entities.append(AdlarThermalPowerSensor(coordinator))
     entities.append(AdlarCOPSensor(coordinator))
@@ -51,16 +50,42 @@ class AdlarSensor(CoordinatorEntity, SensorEntity):
         self._attr_name = name
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = _safe_device_class(device_class)
-        self._attr_state_class = (
-            SensorStateClass.TOTAL_INCREASING
-            if device_class in _TOTAL_INCREASING
-            else SensorStateClass.MEASUREMENT
-        )
+        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._key = name
 
     @property
     def native_value(self):
         return self.coordinator.data.get(self._key)
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.coordinator.config_entry.entry_id)},
+            "name": "Adlar Aurora II Heatpump",
+            "manufacturer": "Adlar",
+            "model": "Aurora II",
+        }
+
+
+class AdlarEnergySensor(CoordinatorEntity, SensorEntity):
+    """Totaal energieverbruik sensor.
+
+    Gebruikt state_class=TOTAL zodat Home Assistant een daling (bijv. na reset
+    van de interne teller) correct interpreteert als een reset en niet als fout.
+    """
+
+    def __init__(self, coordinator):
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_005D"
+        self._attr_name = "Unit Power Consumption"
+        self._attr_native_unit_of_measurement = "kWh"
+        self._attr_device_class = SensorDeviceClass.ENERGY
+        self._attr_state_class = SensorStateClass.TOTAL
+        self._attr_icon = "mdi:counter"
+
+    @property
+    def native_value(self):
+        return self.coordinator.data.get("Unit Power Consumption")
 
     @property
     def device_info(self):
