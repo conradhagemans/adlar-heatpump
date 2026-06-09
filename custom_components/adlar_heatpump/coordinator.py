@@ -18,6 +18,9 @@ from .const import (
     SWITCH_REGISTER,
     SELECT_REGISTERS,
     ENERGY_REGISTER,
+    REFRIGERANT_REGISTER,
+    REFRIGERANT_TYPES,
+    get_temperature_scale,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,6 +28,10 @@ _LOGGER = logging.getLogger(__name__)
 # Delay between individual register reads (seconds)
 # Gives the JPX-3002 splitter and EW11 time to process each request
 REQUEST_DELAY = 0.2
+
+# Registers die een temperatuur zijn (device_class == "temperature")
+# Schaling wordt bepaald door P119 koelmiddeltype
+TEMPERATURE_DEVICE_CLASS = "temperature"
 
 
 def _to_signed(value: int) -> int:
@@ -38,6 +45,9 @@ class AdlarCoordinator(DataUpdateCoordinator):
         self.port = port
         self.slave = slave
         self._client = None
+        self.refrigerant_type: int | None = None
+        self.refrigerant_name: str = "Unknown"
+        self.temperature_scale: float = 1.0  # default R32
         super().__init__(
             hass, _LOGGER, name=DOMAIN,
             update_interval=timedelta(seconds=scan_interval),
@@ -77,6 +87,33 @@ class AdlarCoordinator(DataUpdateCoordinator):
             self._client = None
             return None
 
+    def _detect_refrigerant(self) -> None:
+        """Lees P119 (0x0177) en stel temperatuurschaling in.
+
+        Wordt éénmalig uitgevoerd bij de eerste poll.
+        R32  (2) → ×1.0  (directe °C waarden)
+        R290 (3) → ×0.1  (raw/10 = °C)
+        R410A(1) → ×1.0  (aanname gelijk aan R32)
+        """
+        raw = self._read_one(REFRIGERANT_REGISTER)
+        if raw is None:
+            _LOGGER.warning(
+                "P119 (0x0177) kon niet worden uitgelezen — "
+                "standaard temperatuurschaling ×1 (R32) wordt gebruikt"
+            )
+            return
+
+        self.refrigerant_type = raw
+        self.refrigerant_name = REFRIGERANT_TYPES.get(raw, f"Unknown ({raw})")
+        self.temperature_scale = get_temperature_scale(raw)
+
+        _LOGGER.info(
+            "Koelmiddeltype gedetecteerd: %s (P119=%d) — temperatuurschaling: ×%s",
+            self.refrigerant_name,
+            raw,
+            self.temperature_scale,
+        )
+
     async def _async_update_data(self) -> dict:
         try:
             return await self.hass.async_add_executor_job(self._fetch_all)
@@ -85,6 +122,14 @@ class AdlarCoordinator(DataUpdateCoordinator):
 
     def _fetch_all(self) -> dict:
         data: dict = {}
+
+        # ── Eénmalig: koelmiddeltype detecteren ──
+        if self.refrigerant_type is None:
+            self._detect_refrigerant()
+
+        # Sla koelmiddelinfo op in data zodat het als sensor beschikbaar is
+        data["Refrigerant Type"] = self.refrigerant_name
+        data["Temperature Scale"] = self.temperature_scale
 
         # ── Compressor target frequency ──
         raw = self._read_one(0x0027)
@@ -97,10 +142,14 @@ class AdlarCoordinator(DataUpdateCoordinator):
                 data[name] = None
             else:
                 value = _to_signed(raw) if signed else raw
-                data[name] = round(value * scale, 3) if scale != 1 else value
+                # Temperatuurregisters: schaling uit P119
+                if device_class == TEMPERATURE_DEVICE_CLASS:
+                    effective_scale = self.temperature_scale
+                else:
+                    effective_scale = scale
+                data[name] = round(value * effective_scale, 1) if effective_scale != 1 else value
 
         # ── Energy register (single 16-bit, value directly in kWh) ──
-        # Confirmed: 0x005D = 6128 → 6128 kWh (no scaling, no 32-bit combine)
         raw = self._read_one(ENERGY_REGISTER)
         data["Unit Power Consumption"] = float(raw) if raw is not None else None
 

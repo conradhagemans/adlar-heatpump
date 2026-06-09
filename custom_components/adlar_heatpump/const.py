@@ -107,3 +107,25 @@ SELECT_REGISTERS = [
     (0x0314, "Heating Setting Curve",            CURVE_OPTIONS),
     (0x0316, "Underfloor Heating Setting Curve", CURVE_OPTIONS),
 ]
+
+# ─────────────────────────────────────────────
+# P119 Refrigerant Type register
+# Adres: 0x0177, waarden: 1=R410A, 2=R32, 3=R290
+# Bepaalt de temperatuurschaling:
+#   R32  (waarde 2) → ×1  (raw waarde is directe °C)
+#   R290 (waarde 3) → ×0.1 (raw waarde gedeeld door 10)
+#   R410A (waarde 1) → ×1  (aanname, zelfde als R32)
+# ─────────────────────────────────────────────
+REFRIGERANT_REGISTER = 0x0177
+
+REFRIGERANT_TYPES = {
+    1: "R410A",
+    2: "R32",
+    3: "R290",
+}
+
+def get_temperature_scale(refrigerant_type: int) -> float:
+    """Bepaal temperatuurschaling op basis van koelmiddeltype.
+    R290 gebruikt ×0.1, alle andere ×1.
+    """
+    return 0.1 if refrigerant_type == 3 else 1.0

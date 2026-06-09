@@ -39,6 +39,7 @@ async def async_setup_entry(
     entities.append(AdlarThermalPowerSensor(coordinator))
     entities.append(AdlarCOPSensor(coordinator))
     entities.append(AdlarCalculatedPowerSensor(coordinator))
+    entities.append(AdlarRefrigerantSensor(coordinator))
 
     async_add_entities(entities)
 
@@ -193,6 +194,39 @@ class AdlarCalculatedPowerSensor(CoordinatorEntity, SensorEntity):
             return round(voltage * current, 1)
         except (TypeError, ValueError):
             return None
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.coordinator.config_entry.entry_id)},
+            "name": "Adlar Aurora II Heatpump",
+            "manufacturer": "Adlar",
+            "model": "Aurora II",
+        }
+
+
+class AdlarRefrigerantSensor(CoordinatorEntity, SensorEntity):
+    """Koelmiddeltype sensor — toont R32/R290/R410A op basis van P119 (0x0177)."""
+
+    def __init__(self, coordinator):
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_refrigerant_type"
+        self._attr_name = "Refrigerant Type"
+        self._attr_native_unit_of_measurement = None
+        self._attr_device_class = None
+        self._attr_state_class = None
+        self._attr_icon = "mdi:molecule"
+
+    @property
+    def native_value(self):
+        return self.coordinator.data.get("Refrigerant Type")
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "temperature_scale": self.coordinator.data.get("Temperature Scale"),
+            "p119_register": "0x0177",
+        }
 
     @property
     def device_info(self):
